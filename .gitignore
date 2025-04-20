@@ -1,0 +1,36 @@
+# Training data and output
+/output/
+/output/training_output/
+/output/training_output/*/
+/output/training_output/*/*.jpg
+
+# Training videos
+/data/
+/data/training_videos/
+/data/training_videos/*.mp4
+/data/training_videos/*.avi
+/data/training_videos/*.mov
+
+# Models
+/models/
+/models/*.pth
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db 
