@@ -11,10 +11,6 @@
 /data/training_videos/*.avi
 /data/training_videos/*.mov
 
-# Models
-/models/
-/models/*.pth
-
 # Python cache files
 __pycache__/
 *.py[cod]
