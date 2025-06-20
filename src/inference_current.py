@@ -1,87 +1,23 @@
 # Zero-shot CLIP classification using direct image-to-text comparison
 import cv2
-import torch
-from PIL import Image
 import numpy as np
-from collections import deque
-import open_clip
-import logging
-from activity_display import ActivityDisplay
 import urllib.request
 import urllib.error
 import threading
 import time
 from urllib.parse import urlparse
+from activity_display import ActivityDisplay
+from model_clipZeroShot import CLIPZeroShotModel
+from esp32_client import send_classification
+from activity_mapping import activity_to_int
+from esp32_client import send_activity_packet
+from esp32_client import shutdown
+
+#esp32 client
+esp32_ip = "192.168.0.233"
 
 #cam stream
 cam_stream = "http://192.168.0.25:81/stream"
-
-# Define text prompts for each class
-
-
-CLASS_PROMPT = {
-    'coding': [
-        'point-of-view of coding on a computer',
-        'person typing on a keyboard',
-        'computer screen with code',
-        'programming on a laptop'
-    ],
-    'eating': [
-        'point-of-view of eating food',
-        'person eating a meal',
-        'dining at a table',
-        'consuming food'
-    ],
-    'reading': [
-        'point-of-view of reading a book',
-        'person reading a book',
-        'holding and reading a book',
-        'looking at a book'
-    ],
-    'piano': [
-        'playing the piano',
-        'person at a piano',
-        'piano keyboard',
-        'musician playing piano'
-    ],
-    'nature': [
-        'nature',
-        'outdoor scene',
-        'natural landscape',
-        'outdoors'
-    ],
-    'idle': [
-        'view of random objects',
-        'view of unmoving things',
-        'furniture',
-        'walls',
-        'nothing interesting', 
-        'view of a kitchen',
-        'view of a bedroom',
-        'view of a bathroom',
-        'view of a living room',
-        'view of a dining room',
-        'view of a hallway',
-        'view of a general scene'
-    ]
-}
-
-# Function to get smoothed prediction
-def get_smoothed_prediction(prediction_buffer):
-    if not prediction_buffer:
-        return None
-    
-    # Convert buffer to numpy array for easier manipulation
-    buffer_array = np.array(prediction_buffer)
-    
-    # Apply exponential weighting (more recent predictions have higher weight)
-    weights = np.exp(np.linspace(-1, 0, len(buffer_array)))
-    weights = weights / weights.sum()
-    
-    # Calculate weighted average
-    weighted_avg = np.average(buffer_array, weights=weights, axis=0)
-    
-    return weighted_avg
 
 # Function to get user's camera source choice
 def get_camera_choice():
@@ -497,7 +433,12 @@ def initialize_camera(camera_type):
     
     return None
 
-def run_zeroshot_inference():
+def run_inference_with_model(inference_model):
+    """Run inference loop with any model that returns PredictionResult objects.
+    
+    Args:
+        inference_model: Model object with predict() method returning PredictionResult
+    """
     # Get user's camera choice
     camera_type = get_camera_choice()
     if camera_type is None:
@@ -506,31 +447,8 @@ def run_zeroshot_inference():
     
     # Initialize activity display
     display = ActivityDisplay()
+    last_activity = "None"
     
-    # Initialize CLIP model
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='openai')
-    tokenizer = open_clip.get_tokenizer('ViT-B-32')
-    model = model.to(device)
-    model.eval()
-
-    # Encode text prompts
-    text_features = {}
-    for class_name, prompts in CLASS_PROMPT.items():
-        # Encode all prompts for this class
-        prompt_features = []
-        for prompt in prompts:
-            text_tokens = tokenizer([prompt]).to(device)
-            with torch.no_grad():
-                text_feature = model.encode_text(text_tokens)
-                text_feature = text_feature / text_feature.norm(dim=-1, keepdim=True)
-                prompt_features.append(text_feature)
-        text_features[class_name] = prompt_features
-
-    # Temporal smoothing buffer
-    buffer_size = 30  # Increased from 15 to 30 for more stable predictions
-    prediction_buffer = deque(maxlen=buffer_size)
-
     try:
         # Initialize camera based on user choice
         cap = initialize_camera(camera_type)
@@ -542,8 +460,8 @@ def run_zeroshot_inference():
         print(f"{camera_source} started. Press 'q' to quit.")
 
         # Create a resizable window for camera view
-        cv2.namedWindow("CLIP Zero-shot Classification", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("CLIP Zero-shot Classification", 1280, 720)
+        cv2.namedWindow("Activity Classification", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Activity Classification", 1280, 720)
 
         while cap.isOpened():
             try:
@@ -556,60 +474,39 @@ def run_zeroshot_inference():
                 if frame is None or frame.size == 0:
                     continue
 
-                # Convert frame to PIL Image
-                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                pil_image = Image.fromarray(frame_rgb)
+                # Get prediction from model
+                prediction = inference_model.predict(frame)
+                
+                # Update activity display
+                display.update(prediction.label, prediction.confidence)
 
-                # Get CLIP features
-                with torch.no_grad():
-                    image_features = model.encode_image(preprocess(pil_image).unsqueeze(0).to(device))
-                    image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-                    
-                    # Calculate similarities with all text prompts
-                    similarities = {}
-                    for class_name, prompt_features in text_features.items():
-                        # Calculate similarity with each prompt and average
-                        class_similarities = []
-                        for text_feature in prompt_features:
-                            similarity = torch.nn.functional.cosine_similarity(image_features, text_feature)
-                            class_similarities.append(similarity.item())
-                        similarities[class_name] = np.mean(class_similarities)
-                    
-                    # Convert to array and add to buffer
-                    similarity_array = np.array(list(similarities.values()))
-                    prediction_buffer.append(similarity_array)
+                # Create a copy of the frame for display
+                display_frame = frame.copy()
+                
+                # Add a semi-transparent overlay for text
+                overlay = display_frame.copy()
+                cv2.rectangle(overlay, (0, 0), (300, display_frame.shape[0]), (0, 0, 0), -1)
+                cv2.addWeighted(overlay, 0.7, display_frame, 0.3, 0, display_frame)
 
-                # Get smoothed prediction
-                smoothed_similarities = get_smoothed_prediction(prediction_buffer)
-                if smoothed_similarities is not None:
-                    predicted_idx = np.argmax(smoothed_similarities)
-                    predicted_label = list(CLASS_PROMPT.keys())[predicted_idx]
-                    confidence = smoothed_similarities[predicted_idx]
-                    
-                    # Update activity display
-                    display.update(predicted_label, confidence)
+                # Display prediction
+                prediction_text = f"Activity: {prediction.label}"
+                confidence_text = f"Confidence: {prediction.confidence:.3f}"
+                cv2.putText(display_frame, prediction_text, (10, 30), 
+                          cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                cv2.putText(display_frame, confidence_text, (10, 60), 
+                          cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
-                    # Create a copy of the frame for display
-                    display_frame = frame.copy()
-                    
-                    # Add a semi-transparent overlay for text
-                    overlay = display_frame.copy()
-                    cv2.rectangle(overlay, (0, 0), (300, display_frame.shape[0]), (0, 0, 0), -1)
-                    cv2.addWeighted(overlay, 0.7, display_frame, 0.3, 0, display_frame)
-
-                    # Display predictions in two columns
-                    y_offset = 30
-                    for i, (class_name, similarity) in enumerate(zip(CLASS_PROMPT.keys(), smoothed_similarities)):
-                        similarity_text = f"{class_name}: {similarity:.3f}"
-                        color = (0, 255, 0) if i == predicted_idx else (255, 255, 255)
-                        cv2.putText(display_frame, similarity_text, (10, y_offset), 
-                                  cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-                        y_offset += 20
-
-                    cv2.imshow("CLIP Zero-shot Classification", display_frame)
+                cv2.imshow("Activity Classification", display_frame)
                 
                 if cv2.waitKey(1) & 0xFF == ord('q'):
+                    shutdown()
                     break
+
+                # Send classification to ESP32 if activity has changed according to ActivityDisplay logic
+                if last_activity != display.get_current_activity():
+                    print(f"Activity changed from {last_activity} to {display.get_current_activity()}")
+                    send_activity_packet(display)
+                    last_activity = display.get_current_activity()
 
             except KeyboardInterrupt:
                 print("\nInference interrupted by user. Exiting gracefully...")
@@ -628,9 +525,16 @@ def run_zeroshot_inference():
             cap.release()
         cv2.destroyAllWindows()
         display.cleanup()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        inference_model.cleanup()
         print("Resources cleaned up.")
+
+def run_zeroshot_inference():
+    """Run zero-shot inference using CLIP model."""
+    # Initialize CLIP zero-shot model
+    model = CLIPZeroShotModel(buffer_size=30)
+    
+    # Run inference with the model
+    run_inference_with_model(model)
 
 if __name__ == "__main__":
     run_zeroshot_inference() 

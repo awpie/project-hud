@@ -111,6 +111,38 @@ class ActivityDisplay:
         """Update the activity tracker with new activity and confidence"""
         self.activity_tracker.update_activity(activity, confidence)
         self._update_display()
+    
+    def get_current_activity(self):
+        """Get the current activity label.
+        
+        Returns:
+            str: Current activity label (e.g., 'coding', 'eating', etc.) or None if no activity
+        """
+        return self.activity_tracker.current_activity
+    
+    def get_current_confidence(self):
+        """Get the current activity confidence.
+        
+        Returns:
+            float: Current confidence score (0.0 to 1.0)
+        """
+        return self.activity_tracker.confidence
+    
+    def get_current_duration(self):
+        """Get the duration of the current activity.
+        
+        Returns:
+            float: Duration in seconds
+        """
+        return self.activity_tracker.get_current_duration()
+    
+    def get_activity_tracker(self):
+        """Get the underlying activity tracker object.
+        
+        Returns:
+            ActivityTracker: The activity tracker instance
+        """
+        return self.activity_tracker
         
     def _update_display(self):
         """Update the OLED display with current activity information"""
@@ -149,7 +181,11 @@ class ActivityDisplay:
         
     def cleanup(self):
         """Clean up resources and print activity summary"""
-        cv2.destroyWindow("OLED Simulation")
+        try:
+            cv2.destroyWindow("OLED Simulation")
+        except cv2.error:
+            # Window doesn't exist, which is fine
+            pass
         print("\nActivity Summary:")
         for line in self.activity_tracker.get_activity_summary():
             print(line) 
