@@ -33,7 +33,7 @@ The system is modular; any vision model can be swapped in, as long as it runs fa
 - Displays RPG-style progress bars and time-tracking on the HUD.
 - Example: _“Studying – Level 3”_ with visual XP bar.
 
-### ⚠ Hazard Detection
+###  Hazard Detection
 - Trained on datasets (e.g., OSHA violations) to flag potential dangers in the user’s environment.
 - Can be combined with a **rear-facing camera** to detect hazards behind the user.
 - Useful for workers, cyclists, or visually impaired users.
@@ -59,7 +59,7 @@ The system is modular; any vision model can be swapped in, as long as it runs fa
 
 ---
 
-## 🛠 Quickstart
+##  Quickstart
 
 _(Coming soon — will include setup instructions for ESP32, Python inference server, and example modules)_
 
