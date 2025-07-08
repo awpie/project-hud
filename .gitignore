@@ -30,3 +30,6 @@ ENV/
 # OS specific files
 .DS_Store
 Thumbs.db 
+
+#temp stuff
+/src/testing/learning.py

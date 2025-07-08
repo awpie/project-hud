@@ -45,6 +45,31 @@ def get_camera_choice():
             print(f"Error reading input: {e}")
             return None
 
+def get_esp32_communication_choice():
+    """Get user's choice for ESP32 communication method."""
+    print("\nSelect ESP32 communication method:")
+    print("1. JSON packets (text data)")
+    print("2. Bitmap images (full HUD rendering)")
+    print("3. Both (JSON + bitmap)")
+    
+    while True:
+        try:
+            choice = input("\nEnter your choice (1, 2, or 3): ").strip()
+            if choice == '1':
+                return 'json'
+            elif choice == '2':
+                return 'bitmap'
+            elif choice == '3':
+                return 'both'
+            else:
+                print("Invalid choice. Please enter 1, 2, or 3.")
+        except KeyboardInterrupt:
+            print("\nProgram interrupted by user.")
+            return None
+        except Exception as e:
+            print(f"Error reading input: {e}")
+            return None
+
 class MJPEGStreamReader:
     """Custom MJPEG stream reader using urllib for better compatibility."""
     
@@ -445,9 +470,19 @@ def run_inference_with_model(inference_model):
         print("No camera source selected. Exiting.")
         return
     
+    # Get user's ESP32 communication choice
+    comm_type = get_esp32_communication_choice()
+    if comm_type is None:
+        print("No communication method selected. Exiting.")
+        return
+    
     # Initialize activity display
     display = ActivityDisplay()
     last_activity = "None"
+    
+    # Timer for sending packets every second
+    last_packet_time = time.time()
+    packet_interval = 1.0  # Send packet every 1 second
     
     try:
         # Initialize camera based on user choice
@@ -502,11 +537,20 @@ def run_inference_with_model(inference_model):
                     shutdown()
                     break
 
-                # Send classification to ESP32 if activity has changed according to ActivityDisplay logic
-                if last_activity != display.get_current_activity():
-                    print(f"Activity changed from {last_activity} to {display.get_current_activity()}")
-                    send_activity_packet(display)
-                    last_activity = display.get_current_activity()
+                # Send classification to ESP32 every second
+                current_time = time.time()
+                if current_time - last_packet_time >= packet_interval:
+                    current_activity = display.get_current_activity()
+                    print(f"Sending data for activity: {current_activity}")
+                    
+                    if comm_type in ['json', 'both']:
+                        send_activity_packet(display)
+                    
+                    if comm_type in ['bitmap', 'both']:
+                        from esp32_client import send_bitmap_image
+                        send_bitmap_image(display)
+                    
+                    last_packet_time = current_time
 
             except KeyboardInterrupt:
                 print("\nInference interrupted by user. Exiting gracefully...")
