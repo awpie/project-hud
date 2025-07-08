@@ -1,16 +1,74 @@
-# project-hud
-## What is this?
-This is the training/inference/server code for a AR + Computer Vision platform with modular support of various applications requiring different software and models.
-## What does this do?
-The first iteration of the hardware of this project involves a simple camera module + Wi-Fi server setup that streams camera feed over Wi-Fi to a more powerful device that can run inference on the camera stream.
-Once inference is done, the results are sent over Wi-Fi back to the microcontroller hosting the server to allow it to correctly update an OLED module that beams a "Heads-Up-Display" directly onto the user's Field-Of-View.
+# Project HUD
 
-## Uses
-Project HUD is a modular, variable-use platform that can provide a realtime Heads-Up-Display for many different settings, provided that the model being ran is not prohibitively expensive or slow for the device that runs it, and latency requirements of the use case are met with Wi-Fi speeds (or by giving me enough money to fit a powerful computer on the hardware itself).
-The "activity detection" module uses OpenCLIP classification to determine if the HUD user is in the process of performing some sort of task, such as eating, studying, exercising, speaking with someone, etc, and the HUD displays a progress bar and time-based completion tracking. Yes, like a video game.
-A "hazard detection" module could, for example, be trained on an image dataset containing workplace OSHA violations to quickly identify potential hazards in the user's Field-Of-View and display these hazards on the Heads-Up-Display. A backwards-mounted camera could notify the user of hazards *that they cannot possibly see*. 
-An "education module" could, for example, be trained on an dataset with YOLOv8's posture and hand position features extracted. The original dataset could include first-person footage of someone performing a highly specific task correctly (stripping wires when installing an electrical outlet, performing a particular type of hand movement while playing the piano, correct hand positioning to pass a driver's license test), and the model could detect whether the HUD user is performing the particular hand movements that correlate to correctly completing the task, and provide *instant feedback* that hihglights any mistakes.
-A "pilot module" could, for example, be trained on dashcam car crash footage to quickly alert a driver if signs of an imminent crash is detected. For example, if the car in front of you slams on their brakes, it would be pretty hard to not notice, *even if you were looking the wrong way*, if your Field-of-View suddenly flashed red. Adding with a microphone, and training a parallel model on sounds of car horns, could allow audio-impaired drivers to "see" if another car is sounding their horn.
+##  What is this?
 
-## Quickstart
-write this later
+**Project HUD** is a modular AR + computer vision platform designed for real-time task recognition and heads-up visual feedback. It supports pluggable inference models and can be adapted to a variety of use cases — from activity tracking to hazard detection — all within a wearable, low-latency HUD system.
+
+---
+
+##  What does it do?
+
+In its first hardware iteration, Project HUD uses:
+
+- An **ESP32-CAM module** that streams video over Wi-Fi
+- A more powerful **external inference machine** (e.g., laptop) that:
+  - Runs classification/inference
+  - Sends results back to the ESP32
+- An **OLED display** mounted in the AR headset, which:
+  - Projects a real-time HUD directly into the user’s Field-Of-View (FoV)
+  - Displays progress bars, warnings, or task feedback based on inference output
+
+The system is modular; any vision model can be swapped in, as long as it runs fast enough and the Wi-Fi latency is tolerable for your use case.
+
+---
+
+##  Example Modules / Use Cases
+
+###  Activity Detection (current default)
+- Uses OpenCLIP to classify real-world tasks like:
+  - Eating
+  - Studying
+  - Exercising
+  - Socializing
+- Displays RPG-style progress bars and time-tracking on the HUD.
+- Example: _“Studying – Level 3”_ with visual XP bar.
+
+### ⚠ Hazard Detection
+- Trained on datasets (e.g., OSHA violations) to flag potential dangers in the user’s environment.
+- Can be combined with a **rear-facing camera** to detect hazards behind the user.
+- Useful for workers, cyclists, or visually impaired users.
+
+###  Education Module
+- Uses posture/hand-position keypoints (e.g., YOLOv8 or MediaPipe) to provide **real-time feedback** on task performance.
+- Example: Detects incorrect wire-stripping hand motion, or improper piano hand technique.
+- Offers **instant, visual correction** via HUD.
+
+###  Pilot Safety Module
+- Trained on dashcam footage to detect early signs of car crashes.
+- Alerts the user visually (e.g., flashing red HUD) even if they’re not directly looking.
+- Can optionally integrate microphone input to detect car horns or screeches, aiding audio-impaired drivers.
+
+---
+
+##  Why Project HUD?
+
+- **Modular** — plug in your own model and task logic
+- **Latency-aware** — optimized for low-resolution streaming and real-time updates
+- **Open-ended** — build your own app on top of the HUD interface
+*The real value of this sort of device is that it functions as a second set of eyes that can feed you fully-parsed information in real-time.*
+
+---
+
+## 🛠 Quickstart
+
+_(Coming soon — will include setup instructions for ESP32, Python inference server, and example modules)_
+
+---
+
+##  Planned Features
+
+-  WebSocket support for higher-speed bi-directional updates
+-  Optical alignment / collimation improvements for see-through HUD if possible
+-  Onboard inference with distilled models (TinyCLIP, MobileNet, etc, removing the need for a server setup, easily possible with more expensive hardware)
+
+---
