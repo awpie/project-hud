@@ -55,7 +55,7 @@ The system is modular; any vision model can be swapped in, as long as it runs fa
 - **Modular** — plug in your own model and task logic
 - **Latency-aware** — optimized for low-resolution streaming and real-time updates
 - **Open-ended** — build your own app on top of the HUD interface
-*The real value of this sort of device is that it functions as a second set of eyes that can feed you fully-parsed information in real-time.*
+- *The real value of this sort of device is that it functions as a second set of eyes that can feed you fully-parsed information in real-time.*
 
 ---
 
