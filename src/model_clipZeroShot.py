@@ -75,14 +75,18 @@ def get_smoothed_prediction(prediction_buffer):
 class CLIPZeroShotModel:
     """CLIP Zero-shot classification model with temporal smoothing."""
     
-    def __init__(self, buffer_size=30):
+    def __init__(self, buffer_size=30, inference_interval=5):
         """Initialize the CLIP zero-shot model.
         
         Args:
             buffer_size (int): Size of the temporal smoothing buffer
+            inference_interval (int): Run inference every N frames (default: 5)
         """
         self.buffer_size = buffer_size
+        self.inference_interval = inference_interval
         self.prediction_buffer = deque(maxlen=buffer_size)
+        self.frame_count = 0
+        self.last_prediction = None
         
         # Initialize CLIP model
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -121,39 +125,46 @@ class CLIPZeroShotModel:
         Returns:
             PredictionResult: Contains predicted label and confidence
         """
-        # Convert frame to PIL Image
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        pil_image = Image.fromarray(frame_rgb)
+        self.frame_count += 1
         
-        # Get CLIP features
-        with torch.no_grad():
-            image_features = self.model.encode_image(self.preprocess(pil_image).unsqueeze(0).to(self.device))
-            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+        # Only run inference every N frames to improve performance
+        if self.frame_count % self.inference_interval == 0:
+            # Convert frame to PIL Image
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            pil_image = Image.fromarray(frame_rgb)
             
-            # Calculate similarities with all text prompts
-            similarities = {}
-            for class_name, prompt_features in self.text_features.items():
-                # Calculate similarity with each prompt and average
-                class_similarities = []
-                for text_feature in prompt_features:
-                    similarity = torch.nn.functional.cosine_similarity(image_features, text_feature)
-                    class_similarities.append(similarity.item())
-                similarities[class_name] = np.mean(class_similarities)
+            # Get CLIP features
+            with torch.no_grad():
+                image_features = self.model.encode_image(self.preprocess(pil_image).unsqueeze(0).to(self.device))
+                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+                
+                # Calculate similarities with all text prompts
+                similarities = {}
+                for class_name, prompt_features in self.text_features.items():
+                    # Calculate similarity with each prompt and average
+                    class_similarities = []
+                    for text_feature in prompt_features:
+                        similarity = torch.nn.functional.cosine_similarity(image_features, text_feature)
+                        class_similarities.append(similarity.item())
+                    similarities[class_name] = np.mean(class_similarities)
+                
+                # Convert to array and add to buffer
+                similarity_array = np.array(list(similarities.values()))
+                self.prediction_buffer.append(similarity_array)
             
-            # Convert to array and add to buffer
-            similarity_array = np.array(list(similarities.values()))
-            self.prediction_buffer.append(similarity_array)
+            # Get smoothed prediction
+            smoothed_similarities = get_smoothed_prediction(self.prediction_buffer)
+            if smoothed_similarities is not None:
+                predicted_idx = np.argmax(smoothed_similarities)
+                predicted_label = self.class_names[predicted_idx]
+                confidence = smoothed_similarities[predicted_idx]
+                
+                self.last_prediction = PredictionResult(predicted_label, confidence)
         
-        # Get smoothed prediction
-        smoothed_similarities = get_smoothed_prediction(self.prediction_buffer)
-        if smoothed_similarities is not None:
-            predicted_idx = np.argmax(smoothed_similarities)
-            predicted_label = self.class_names[predicted_idx]
-            confidence = smoothed_similarities[predicted_idx]
-            
-            return PredictionResult(predicted_label, confidence)
+        # Return cached prediction if available, otherwise default
+        if self.last_prediction is not None:
+            return self.last_prediction
         else:
-            # Return default prediction if buffer is empty
             return PredictionResult("idle", 0.0)
     
     def get_all_predictions(self, frame):

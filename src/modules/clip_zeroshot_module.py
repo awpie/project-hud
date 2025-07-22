@@ -1,9 +1,20 @@
 import cv2
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
+import sys
+import os
 import time
 from datetime import timedelta
 
+# Add the src directory to the path to import modules
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from modules.base_module import BaseModule
+from model_clipZeroShot import CLIPZeroShotModel
+
 class ActivityTracker:
+    """Activity tracking and XP system for CLIP zero-shot module."""
+    
     def __init__(self):
         self.current_activity = None
         self.start_time = None
@@ -100,93 +111,104 @@ class ActivityTracker:
         summary.append(f"Total XP: {self.get_current_xp()}")
         return summary
 
-class ActivityDisplay:
-    def __init__(self):
+class CLIPZeroShotModule(BaseModule):
+    """CLIP zero-shot activity classification module."""
+    
+    def __init__(self, buffer_size=30, inference_interval=1):
+        super().__init__()
+        self.buffer_size = buffer_size
+        self.clip_model = CLIPZeroShotModel(buffer_size=buffer_size, inference_interval=inference_interval)
         self.activity_tracker = ActivityTracker()
-        # Create OLED simulation window
-        cv2.namedWindow("OLED Simulation", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("OLED Simulation", 256, 128)  # 2x scale for better visibility
-        
-    def update(self, activity, confidence):
-        """Update the activity tracker with new activity and confidence"""
-        self.activity_tracker.update_activity(activity, confidence)
-        self._update_display()
+        self.last_activity = "None"
     
-    def get_current_activity(self):
-        """Get the current activity label.
-        
-        Returns:
-            str: Current activity label (e.g., 'coding', 'eating', etc.) or None if no activity
-        """
-        return self.activity_tracker.current_activity
+    def get_plugin_requirements(self):
+        """Define plugin requirements for CLIP zero-shot module."""
+        return {
+            'camera': {
+                'type': 'droidcam',  # Default camera type
+                'config': {
+                    'device_id': 1,
+                    'width': 1280,
+                    'height': 720
+                }
+            },
+            'display': {
+                'type': 'cv2',  # Default display type
+                'config': {
+                    'scale': 4,
+                    'window_name': 'CLIP Zero-Shot Preview'
+                }
+            }
+        }
     
-    def get_current_confidence(self):
-        """Get the current activity confidence.
+    def set_camera_type(self, camera_type, **config):
+        """Change camera type and configuration."""
+        if camera_type not in ['droidcam', 'url', 'test']:
+            raise ValueError(f"Unknown camera type: {camera_type}")
         
-        Returns:
-            float: Current confidence score (0.0 to 1.0)
-        """
-        return self.activity_tracker.confidence
+        # Update camera configuration
+        self.plugin_configs['camera'] = {
+            'type': camera_type,
+            'config': config
+        }
+        
+        # If camera plugin is already initialized, reinitialize it
+        if 'camera' in self.plugins:
+            old_camera = self.plugins['camera']
+            old_camera.release()
+            del self.plugins['camera']
+            
+            # Initialize new camera plugin
+            self._initialize_plugin('camera', self.plugin_configs['camera'])
     
-    def get_current_duration(self):
-        """Get the duration of the current activity.
+    def set_display_type(self, display_type, **config):
+        """Change display type and configuration."""
+        if display_type not in ['cv2', 'console', 'none']:
+            raise ValueError(f"Unknown display type: {display_type}")
         
-        Returns:
-            float: Duration in seconds
+        # Update display configuration
+        self.plugin_configs['display'] = {
+            'type': display_type,
+            'config': config
+        }
+        
+        # If display plugin is already initialized, reinitialize it
+        if 'display' in self.plugins:
+            old_display = self.plugins['display']
+            old_display.cleanup()
+            del self.plugins['display']
+            
+            # Initialize new display plugin
+            self._initialize_plugin('display', self.plugin_configs['display'])
+        
+    def process_frame(self, frame: np.ndarray) -> Image.Image:
         """
-        return self.activity_tracker.get_current_duration()
+        Process a camera frame using CLIP zero-shot classification.
+        
+        Args:
+            frame: Camera frame as numpy array (BGR format from OpenCV)
+            
+        Returns:
+            PIL Image object with activity display for ESP32 HUD
+        """
+        # Get prediction from CLIP model
+        prediction = self.clip_model.predict(frame)
+        
+        # Update activity tracker
+        self.activity_tracker.update_activity(prediction.label, prediction.confidence)
+        self.last_activity = prediction.label
+        
+        # Create bitmap for ESP32 HUD
+        bitmap = self._generate_bitmap()
+        
+        return bitmap
     
-    def get_activity_tracker(self):
-        """Get the underlying activity tracker object.
-        
-        Returns:
-            ActivityTracker: The activity tracker instance
-        """
-        return self.activity_tracker
-        
-    def _update_display(self):
-        """Update the OLED display with current activity information"""
-        # Create a black canvas for OLED simulation
-        oled = np.zeros((64, 128), dtype=np.uint8)
-        
-        # Draw activity name and confidence
-        activity_text = f"{self.activity_tracker.current_activity or 'No Activity'}"
-        confidence_text = f"{self.activity_tracker.confidence:.1%}"
-        cv2.putText(oled, activity_text, (2, 10), cv2.FONT_HERSHEY_SIMPLEX, 0.3, 255, 1)
-        cv2.putText(oled, confidence_text, (2, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.3, 255, 1)
-        
-        # Draw pending activity if there is one
-        if self.activity_tracker.pending_activity is not None:
-            pending_time = time.time() - self.activity_tracker.pending_start_time
-            pending_text = f"-> {self.activity_tracker.pending_activity} ({pending_time:.1f}s)"
-            cv2.putText(oled, pending_text, (2, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.3, 255, 1)
-        
-        # Draw XP bar
-        xp_progress = self.activity_tracker.get_xp_progress()
-        cv2.rectangle(oled, (2, 30), (126, 38), 255, 1)  # XP bar border
-        cv2.rectangle(oled, (2, 30), (2 + int(124 * xp_progress / 100), 38), 255, -1)  # XP progress
-        
-        # Draw timer
-        duration = self.activity_tracker.get_current_duration()
-        minutes = int(duration // 60)
-        seconds = int(duration % 60)
-        timer_text = f"{minutes:02d}:{seconds:02d}"
-        cv2.putText(oled, timer_text, (2, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.4, 255, 1)
-        
-        # Draw total XP
-        xp_text = f"XP: {self.activity_tracker.get_current_xp()}"
-        cv2.putText(oled, xp_text, (2, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.3, 255, 1)
-        
-        cv2.imshow("OLED Simulation", oled)
-        
-    def generate_bitmap(self):
+    def _generate_bitmap(self):
         """Generate a PIL Image bitmap for ESP32 HUD.
         
         Returns:
             PIL.Image: 128x64 monochrome image ready for ESP32 OLED
         """
-        from PIL import Image, ImageDraw, ImageFont
-        
         # Create a new image with white background (will be inverted for OLED)
         image = Image.new('L', (128, 64), 255)
         draw = ImageDraw.Draw(image)
@@ -263,12 +285,8 @@ class ActivityDisplay:
         return image
     
     def cleanup(self):
-        """Clean up resources and print activity summary"""
-        try:
-            cv2.destroyWindow("OLED Simulation")
-        except cv2.error:
-            # Window doesn't exist, which is fine
-            pass
+        """Clean up resources and print activity summary."""
+        self.clip_model.cleanup()
         print("\nActivity Summary:")
         for line in self.activity_tracker.get_activity_summary():
             print(line) 

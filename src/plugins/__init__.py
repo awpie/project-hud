@@ -1,0 +1,1 @@
+# Plugins package for shared functionality

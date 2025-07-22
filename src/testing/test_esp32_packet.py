@@ -1,6 +1,6 @@
 # Test script for ESP32 activity packet functionality
 from activity_display import ActivityDisplay
-from esp32_client import create_activity_packet, send_activity_packet, print_activity_packet
+from execution.esp32_client import create_activity_packet, send_activity_packet, print_activity_packet
 
 def test_activity_packet():
     """Test creating and sending activity packets."""

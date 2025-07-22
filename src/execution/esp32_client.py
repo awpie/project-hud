@@ -206,6 +206,52 @@ def send_bitmap_image(activity_display):
         print(f"✗ Error sending bitmap image: {e}")
         return False
 
+def send_pil_image(image):
+    """Send PIL image directly to ESP32.
+    
+    Args:
+        image: PIL Image object (will be resized to OLED dimensions if needed)
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Ensure image is the right size for OLED
+        if image.size != (OLED_WIDTH, OLED_HEIGHT):
+            image = image.resize((OLED_WIDTH, OLED_HEIGHT))
+        
+        # Convert to base64
+        base64_data = image_to_base64(image)
+        
+        # Create payload
+        payload = {
+            "bitmap": base64_data,
+            "width": OLED_WIDTH,
+            "height": OLED_HEIGHT,
+            "timestamp": int(time.time())
+        }
+        
+        # Send to ESP32
+        r = requests.post(
+            f"http://{esp32_ip}/bitmap", 
+            json=payload,
+            timeout=2.0,
+            headers={'Content-Type': 'application/json'}
+        )
+        
+        if r.status_code == 200:
+            return True
+        else:
+            print(f"✗ ESP32 returned status code: {r.status_code}")
+            return False
+            
+    except requests.exceptions.RequestException as e:
+        print(f"✗ ESP32 not responding: {e}")
+        return False
+    except Exception as e:
+        print(f"✗ Error sending PIL image: {e}")
+        return False
+
 def send_bitmap_image_raw(activity_display):
     """Send bitmap image to ESP32 as raw binary data.
     

@@ -8,10 +8,10 @@ import time
 from urllib.parse import urlparse
 from activity_display import ActivityDisplay
 from model_clipZeroShot import CLIPZeroShotModel
-from esp32_client import send_classification
+from execution.esp32_client import send_classification
 from activity_mapping import activity_to_int
-from esp32_client import send_activity_packet
-from esp32_client import shutdown
+from execution.esp32_client import send_activity_packet
+from execution.esp32_client import shutdown
 
 #esp32 client
 esp32_ip = "192.168.0.233"
@@ -547,7 +547,7 @@ def run_inference_with_model(inference_model):
                         send_activity_packet(display)
                     
                     if comm_type in ['bitmap', 'both']:
-                        from esp32_client import send_bitmap_image
+                        from execution.esp32_client import send_bitmap_image
                         send_bitmap_image(display)
                     
                     last_packet_time = current_time

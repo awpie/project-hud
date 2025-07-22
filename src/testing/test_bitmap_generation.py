@@ -12,7 +12,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from activity_display import ActivityDisplay
-from esp32_client import (
+from execution.esp32_client import (
     create_hud_image, 
     send_bitmap_image, 
     send_bitmap_image_async,

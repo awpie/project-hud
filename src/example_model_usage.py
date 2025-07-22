@@ -1,5 +1,5 @@
 # Example script demonstrating modular model usage
-from inference_current import run_inference_with_model
+from execution.inference_current import run_inference_with_model
 from model_clipZeroShot import CLIPZeroShotModel
 from model_mock import MockModel
 
