@@ -18,7 +18,7 @@ In its first hardware iteration, Project HUD uses:
   - Projects a real-time HUD directly into the user’s Field-Of-View (FoV)
   - Displays progress bars, warnings, or task feedback based on inference output
 
-The system is modular; any vision model can be swapped in, as long as it runs fast enough and the Wi-Fi latency is tolerable for your use case.
+The system is modular; any vision model can be swapped in, as long as it runs fast enough, returns a properly configured bitmap for the display, and the Wi-Fi latency is tolerable for your use case.
 
 ---
 
@@ -68,7 +68,7 @@ _(Coming soon — will include setup instructions for ESP32, Python inference se
 ##  Planned Features
 
 -  WebSocket support for higher-speed bi-directional updates
--  Optical alignment / collimation improvements for see-through HUD if possible
+-  Optical alignment / collimation improvements HUD if possible
 -  Onboard inference with distilled models (TinyCLIP, MobileNet, etc, removing the need for a server setup, easily possible with more expensive hardware)
 
 ---
